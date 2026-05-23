@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>type to play</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0d0d0f; --surface: #16161a; --border: rgba(255,255,255,0.07);
+    --text: #e8e6e0; --muted: rgba(232,230,224,0.35); --accent: #c8a87a;
+  }
+  html { height: 100%; } body { min-height: 100%; background: var(--bg); color: var(--text); font-family: 'Space Mono', monospace; overflow-y: auto; overflow-x: hidden; }
+  body { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 18px 20px 32px; gap: 0; }
+
+  .header { text-align: center; margin-bottom: 12px; }
+  .header h1 { font-size: 12px; letter-spacing: 4px; text-transform: uppercase; color: var(--accent); font-weight: 400; margin-bottom: 4px; }
+  .header p { font-size: 10px; color: var(--muted); letter-spacing: 1px; }
+
+  /* chord display */
+  .chord-bar {
+    display: flex; gap: 8px; align-items: center; justify-content: center;
+    margin-bottom: 8px; height: 28px;
+  }
+  .chord-name {
+    font-size: 18px; font-weight: 700; color: var(--accent);
+    letter-spacing: 2px; min-width: 80px; text-align: center;
+    transition: all 0.3s ease;
+  }
+  .chord-notes {
+    font-size: 10px; color: var(--muted); letter-spacing: 1px;
+    padding-top: 4px;
+  }
+  .mood-tag {
+    font-size: 9px; letter-spacing: 2px; text-transform: uppercase;
+    color: rgba(200,168,122,0.5); border: 1px solid rgba(200,168,122,0.2);
+    border-radius: 20px; padding: 3px 10px;
+  }
+
+  /* display */
+  .display {
+    width: 100%; max-width: 660px; min-height: 44px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 18px;
+    font-size: 18px; letter-spacing: 2px; line-height: 1.5;
+    color: var(--text); word-break: break-all; margin-bottom: 10px;
+    transition: border-color 0.1s;
+  }
+  .display.active { border-color: rgba(200,168,122,0.35); }
+  .cursor { display: inline-block; width: 2px; height: 1.1em; background: var(--accent); vertical-align: text-bottom; animation: blink 1s step-end infinite; margin-left: 2px; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+  .placeholder { color: var(--muted); font-size: 13px; letter-spacing: 1px; font-style: italic; }
+
+  /* waveform */
+  .wave-wrap { width: 100%; max-width: 660px; height: 28px; margin-bottom: 10px; }
+  canvas#wave { width: 100%; height: 100%; }
+
+  /* keyboard */
+  .kb-wrap { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
+  .kb-row { display: flex; gap: 4px; justify-content: center; }
+  .key {
+    width: 36px; height: 36px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 5px;
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 1px; cursor: default;
+    transition: background 0.05s, border-color 0.05s, transform 0.05s;
+    user-select: none; flex-shrink: 0;
+  }
+  .key .letter { font-size: 12px; font-weight: 700; color: var(--text); line-height: 1; }
+  .key .note { font-size: 7px; color: var(--muted); letter-spacing: 0.4px; line-height: 1; }
+  .key.pressed { transform: scale(0.88) translateY(2px); border-color: var(--accent); }
+  .key.pressed .letter { color: var(--accent); }
+  .key.in-chord { border-color: rgba(200,168,122,0.3); }
+  .key.in-chord .note { color: rgba(200,168,122,0.7); }
+
+  /* flash colours — warmer palette */
+  .key.flash-0 { background: rgba(200,100,90,0.3); }
+  .key.flash-1 { background: rgba(210,150,70,0.3); }
+  .key.flash-2 { background: rgba(170,200,80,0.3); }
+  .key.flash-3 { background: rgba(70,190,150,0.3); }
+  .key.flash-4 { background: rgba(70,140,220,0.3); }
+  .key.flash-5 { background: rgba(140,80,220,0.3); }
+  .key.flash-6 { background: rgba(220,80,160,0.3); }
+
+  .key.space { width: 160px; height: 36px; }
+  .key.space .letter { font-size: 9px; letter-spacing: 2px; color: var(--muted); }
+  .key.wide { width: 62px; }
+
+  /* controls */
+  .controls { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; justify-content: center; }
+  .control-group { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+  .control-group label { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
+  .slider { -webkit-appearance: none; width: 100px; height: 2px; background: var(--border); outline: none; border-radius: 2px; }
+  .slider::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); cursor: pointer; }
+  .btn-group { display: flex; gap: 5px; }
+  .btn {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 5px; color: var(--muted); font-family: 'Space Mono', monospace;
+    font-size: 9px; letter-spacing: 1px; text-transform: uppercase;
+    padding: 6px 11px; cursor: pointer; transition: border-color 0.15s, color 0.15s;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.active { border-color: var(--accent); color: var(--accent); background: rgba(200,168,122,0.08); }
+
+  /* note popup */
+  .note-popup {
+    position: fixed; pointer-events: none;
+    font-family: 'Space Mono', monospace; font-size: 11px;
+    color: var(--accent); letter-spacing: 1px;
+    opacity: 0; transform: translateY(0px);
+    transition: opacity 0.06s, transform 0.35s;
+    z-index: 100;
+  }
+  .note-popup.show { opacity: 1; transform: translateY(-26px); }
+
+  /* progression dots */
+  .prog-dots { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+  .prog-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--border); transition: background 0.3s, transform 0.2s;
+  }
+  .prog-dot.active { background: var(--accent); transform: scale(1.4); }
+  .prog-dot.visited { background: rgba(200,168,122,0.35); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>type to play</h1>
+  <p>smart chord progressions — every word sounds musical</p>
+</div>
+
+<div class="chord-bar">
+  <div class="chord-name" id="chordName">—</div>
+  <div class="chord-notes" id="chordNotes"></div>
+  <div class="mood-tag" id="moodTag">waiting</div>
+</div>
+
+<div class="prog-dots" id="progDots"></div>
+
+<div class="display" id="display">
+  <span class="placeholder" id="placeholder">start typing...</span>
+  <span id="typed"></span><span class="cursor"></span>
+</div>
+
+<canvas id="wave" class="wave-wrap"></canvas>
+<div class="kb-wrap" id="keyboard"></div>
+
+<div class="controls">
+  <div class="control-group">
+    <label>Volume</label>
+    <input type="range" class="slider" id="vol" min="0" max="1" step="0.01" value="0.65">
+  </div>
+  <div class="control-group">
+    <label>Reverb</label>
+    <input type="range" class="slider" id="reverb" min="0" max="1" step="0.01" value="0.45">
+  </div>
+  <div class="control-group">
+    <label>Note length</label>
+    <input type="range" class="slider" id="decay" min="0.2" max="3" step="0.05" value="1.1">
+  </div>
+  <div class="control-group">
+    <label>Sound</label>
+    <div class="btn-group">
+      <button class="btn active" id="btn-piano" onclick="setMode('piano')">Piano</button>
+      <button class="btn" id="btn-bell" onclick="setMode('bell')">Bell</button>
+      <button class="btn" id="btn-pad" onclick="setMode('pad')">Pad</button>
+      <button class="btn" id="btn-pluck" onclick="setMode('pluck')">Pluck</button>
+    </div>
+  </div>
+  <div class="control-group">
+    <label>Mood</label>
+    <div class="btn-group">
+      <button class="btn active" id="btn-dreamy" onclick="setMood('dreamy')">Dreamy</button>
+      <button class="btn" id="btn-melancholy" onclick="setMood('melancholy')">Sad</button>
+      <button class="btn" id="btn-jazz" onclick="setMood('jazz')">Jazz</button>
+      <button class="btn" id="btn-epic" onclick="setMood('epic')">Epic</button>
+    </div>
+  </div>
+</div>
+
+<div class="note-popup" id="notePopup"></div>
+
+<script>
+// ════════════════════════════════════════════════════════════
+// MUSIC THEORY ENGINE
+// ════════════════════════════════════════════════════════════
+
+const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B']
+
+// Each mood = a chord progression (Roman numerals as semitone arrays from root C)
+// Each chord = { name, root (semitones from C), type, color }
+// type gives the intervals above root
+
+const MOODS = {
+  dreamy: {
+    label: 'Dreamy',
+    root: 0, // C
+    bpm: 72,
+    progression: [
+      { name: 'Cmaj7',  root: 0,  intervals: [0,4,7,11],     color: '#7ec8e3' },
+      { name: 'Am7',    root: 9,  intervals: [0,3,7,10],     color: '#c8a87a' },
+      { name: 'Fmaj7',  root: 5,  intervals: [0,4,7,11],     color: '#a87ec8' },
+      { name: 'G6',     root: 7,  intervals: [0,4,7,9],      color: '#7ec8a8' },
+    ],
+    melodyScale: [0,2,4,7,9,12,14,16], // C pentatonic major (2 octaves)
+    bassOctave: 2,
+    melodyOctave: 4,
+  },
+  melancholy: {
+    label: 'Melancholy',
+    root: 9, // A
+    bpm: 60,
+    progression: [
+      { name: 'Am',     root: 9,  intervals: [0,3,7],        color: '#8888cc' },
+      { name: 'F',      root: 5,  intervals: [0,4,7],        color: '#cc8888' },
+      { name: 'C',      root: 0,  intervals: [0,4,7],        color: '#88aacc' },
+      { name: 'Em',     root: 4,  intervals: [0,3,7],        color: '#aaccaa' },
+    ],
+    melodyScale: [0,2,3,5,7,8,10,12], // A natural minor
+    bassOctave: 2,
+    melodyOctave: 4,
+  },
+  jazz: {
+    label: 'Jazz',
+    root: 5, // F
+    bpm: 88,
+    progression: [
+      { name: 'Fmaj9',  root: 5,  intervals: [0,4,7,11,14],  color: '#e3c87e' },
+      { name: 'Dm9',    root: 2,  intervals: [0,3,7,10,14],  color: '#c87ea8' },
+      { name: 'Gm7',    root: 7,  intervals: [0,3,7,10],     color: '#7ec8c8' },
+      { name: 'C13',    root: 0,  intervals: [0,4,7,10,14,21],color:'#c8a07e' },
+    ],
+    melodyScale: [0,2,4,6,7,9,11,12], // F Lydian
+    bassOctave: 2,
+    melodyOctave: 4,
+  },
+  epic: {
+    label: 'Epic',
+    root: 0, // C
+    bpm: 76,
+    progression: [
+      { name: 'C5',     root: 0,  intervals: [0,7,12],       color: '#e3a07e' },
+      { name: 'Bb',     root: 10, intervals: [0,4,7],        color: '#cc7e7e' },
+      { name: 'Fm',     root: 5,  intervals: [0,3,7],        color: '#7e9ecc' },
+      { name: 'Ab',     root: 8,  intervals: [0,4,7],        color: '#aaccaa' },
+    ],
+    melodyScale: [0,2,3,5,7,9,10,12], // C Dorian
+    bassOctave: 2,
+    melodyOctave: 4,
+  },
+}
+
+let currentMood   = 'dreamy'
+let currentMode   = 'piano'
+let chordIndex    = 0
+let charCount     = 0   // chars typed in current chord window
+let typedText     = ''
+const CHARS_PER_CHORD = 8  // advance chord every N characters
+
+// How many characters map to chord advance
+function getMood() { return MOODS[currentMood] }
+function getChord() { return getMood().progression[chordIndex] }
+
+// Given a letter index (0-25), pick a melody note from the scale
+// within the current chord's color tones
+function pickMelodyNote(charCode) {
+  const mood = getMood()
+  const chord = getChord()
+  const scale = mood.melodyScale
+  const baseOct = mood.melodyOctave
+
+  // Use char position to walk the scale — ensures melodic motion
+  const scaleLen = scale.length
+  // Map char (0-25) to scale steps with some contour
+  const step = charCode % scaleLen
+  const semitone = scale[step]
+  const chordRoot = chord.root
+
+  // Snap to nearest chord tone for harmonic consonance
+  const chordTones = chord.intervals.map(i => (chordRoot + i) % 12)
+
+  // Blend: 70% pure scale, 30% snapped to chord tone
+  const noteSemitone = (chordRoot + semitone) % 12
+  const snapped = snapToChord(noteSemitone, chordTones)
+
+  // Choose octave: vary slightly by position for melodic shape
+  const octaveShift = step > scaleLen / 2 ? 1 : 0
+  const midi = (baseOct + octaveShift) * 12 + snapped
+
+  return midi
+}
+
+function snapToChord(semitone, chordTones) {
+  let best = chordTones[0], bestDist = 12
+  for (const ct of chordTones) {
+    const dist = Math.min(Math.abs(ct - semitone), 12 - Math.abs(ct - semitone))
+    if (dist < bestDist) { bestDist = dist; best = ct }
+  }
+  // If very close to a chord tone, use it; otherwise keep scale note
+  return bestDist <= 2 ? best : semitone
+}
+
+function pickBassNote() {
+  const mood = getMood()
+  const chord = getChord()
+  const bassOct = mood.bassOctave
+  return bassOct * 12 + chord.root
+}
+
+function advanceChord() {
+  const prog = getMood().progression
+  chordIndex = (chordIndex + 1) % prog.length
+  charCount = 0
+  updateChordDisplay()
+  updateKeyHighlights()
+  // play a soft bass note on chord change
+  if (ctx) playBass()
+}
+
+function updateChordDisplay() {
+  const chord = getChord()
+  const mood = getMood()
+  document.getElementById('chordName').textContent = chord.name
+  document.getElementById('chordName').style.color = chord.color
+  document.getElementById('moodTag').textContent = mood.label
+
+  // chord notes
+  const notes = chord.intervals.map(i => NOTE_NAMES[(chord.root + i) % 12])
+  document.getElementById('chordNotes').textContent = notes.join(' · ')
+
+  // progression dots
+  const dots = document.querySelectorAll('.prog-dot')
+  dots.forEach((d, i) => {
+    d.classList.toggle('active', i === chordIndex)
+    d.classList.toggle('visited', i < chordIndex)
+  })
+}
+
+// ════════════════════════════════════════════════════════════
+// AUDIO ENGINE
+// ════════════════════════════════════════════════════════════
+
+let ctx = null
+let masterGain, reverbNode, reverbGain, dryGain, analyser, dataArray
+
+function initAudio() {
+  if (ctx) return
+  ctx = new (window.AudioContext || window.webkitAudioContext)()
+  masterGain = ctx.createGain()
+  masterGain.gain.value = parseFloat(document.getElementById('vol').value)
+  reverbNode = ctx.createConvolver()
+  reverbGain = ctx.createGain()
+  dryGain    = ctx.createGain()
+  const rv = parseFloat(document.getElementById('reverb').value)
+  reverbGain.gain.value = rv * 0.7
+  dryGain.gain.value    = 1
+  buildImpulse(rv)
+  analyser = ctx.createAnalyser()
+  analyser.fftSize = 512
+  dataArray = new Uint8Array(analyser.frequencyBinCount)
+  masterGain.connect(dryGain)
+  masterGain.connect(reverbNode)
+  reverbNode.connect(reverbGain)
+  dryGain.connect(analyser)
+  reverbGain.connect(analyser)
+  analyser.connect(ctx.destination)
+}
+
+function buildImpulse(rv) {
+  if (!ctx) return
+  const sr = ctx.sampleRate
+  const len = sr * (0.8 + rv * 2.8)
+  const buf = ctx.createBuffer(2, len, sr)
+  for (let c = 0; c < 2; c++) {
+    const ch = buf.getChannelData(c)
+    for (let i = 0; i < len; i++)
+      ch[i] = (Math.random()*2-1) * Math.pow(1 - i/len, 1.5 + rv * 4)
+  }
+  reverbNode.buffer = buf
+}
+
+document.getElementById('vol').addEventListener('input', e => {
+  if (masterGain) masterGain.gain.value = parseFloat(e.target.value)
+})
+document.getElementById('reverb').addEventListener('input', e => {
+  const rv = parseFloat(e.target.value)
+  if (reverbGain) { reverbGain.gain.value = rv*0.7; buildImpulse(rv) }
+})
+
+function midiToFreq(midi) { return 440 * Math.pow(2, (midi-69)/12) }
+
+// Humanize: tiny random offset to velocity and timing for organic feel
+function humanVel(base) { return base * (0.88 + Math.random()*0.24) }
+function humanTime(t)   { return t + (Math.random()-0.5)*0.012 }
+
+function playTone(midi, velocityMult = 1) {
+  if (!ctx) return
+  const freq  = midiToFreq(midi)
+  const decay = parseFloat(document.getElementById('decay').value)
+  const vel   = humanVel(velocityMult)
+  const now   = humanTime(ctx.currentTime)
+
+  const gain = ctx.createGain()
+  gain.connect(masterGain)
+
+  if (currentMode === 'piano') {
+    const o1 = ctx.createOscillator(), o2 = ctx.createOscillator(), o3 = ctx.createOscillator()
+    o1.type = 'triangle'; o2.type = 'sine'; o3.type = 'sine'
+    o1.frequency.value = freq
+    o2.frequency.value = freq * 2.001
+    o3.frequency.value = freq * 3.002
+    const g1=ctx.createGain(),g2=ctx.createGain(),g3=ctx.createGain()
+    g1.gain.value=0.55; g2.gain.value=0.25; g3.gain.value=0.08
+    o1.connect(g1);g1.connect(gain)
+    o2.connect(g2);g2.connect(gain)
+    o3.connect(g3);g3.connect(gain)
+    gain.gain.setValueAtTime(0, now)
+    gain.gain.linearRampToValueAtTime(0.8*vel, now+0.006)
+    gain.gain.exponentialRampToValueAtTime(0.3*vel, now+0.1)
+    gain.gain.exponentialRampToValueAtTime(0.001, now+decay)
+    ;[o1,o2,o3].forEach(o=>{o.start(now);o.stop(now+decay+0.05)})
+
+  } else if (currentMode === 'bell') {
+    const partials=[1,2.756,5.404,8.933], amps=[0.6,0.25,0.1,0.05]
+    partials.forEach((r,i)=>{
+      const o=ctx.createOscillator(),g=ctx.createGain()
+      o.type='sine'; o.frequency.value=freq*r
+      o.connect(g);g.connect(gain)
+      g.gain.setValueAtTime(0,now)
+      g.gain.linearRampToValueAtTime(amps[i]*vel,now+0.003)
+      g.gain.exponentialRampToValueAtTime(0.001,now+decay*(1.6-i*0.25))
+      o.start(now);o.stop(now+decay*2)
+    })
+    gain.gain.setValueAtTime(1,now)
+
+  } else if (currentMode === 'pad') {
+    // Lush pad: 3 slightly detuned sines + slow attack
+    const detunes=[0,-6,6], amps=[0.5,0.3,0.3]
+    detunes.forEach((d,i)=>{
+      const o=ctx.createOscillator(),g=ctx.createGain()
+      o.type='sine'
+      o.frequency.value=freq*Math.pow(2,d/1200)
+      o.connect(g);g.connect(gain)
+      g.gain.value=amps[i]*vel*0.5
+      o.start(now);o.stop(now+decay+0.8)
+    })
+    // Subtle filter
+    const filt=ctx.createBiquadFilter()
+    filt.type='lowpass'; filt.frequency.value=freq*3; filt.Q.value=0.8
+    gain.connect(filt); filt.disconnect(); gain.disconnect()
+    const o=ctx.createOscillator(),g2=ctx.createGain()
+    o.type='sine'; o.frequency.value=freq
+    o.connect(g2); g2.connect(masterGain)
+    g2.gain.setValueAtTime(0,now)
+    g2.gain.linearRampToValueAtTime(0.35*vel,now+0.18)
+    g2.gain.setValueAtTime(0.35*vel,now+decay-0.1)
+    g2.gain.linearRampToValueAtTime(0,now+decay+0.3)
+    o.start(now);o.stop(now+decay+0.4)
+    return // already connected
+
+  } else if (currentMode === 'pluck') {
+    const bufSize=Math.max(8,Math.ceil(ctx.sampleRate/freq))
+    const buf=ctx.createBuffer(1,bufSize,ctx.sampleRate)
+    const d=buf.getChannelData(0)
+    for(let i=0;i<bufSize;i++) d[i]=Math.random()*2-1
+    const src=ctx.createBufferSource()
+    src.buffer=buf; src.loop=true
+    const filt=ctx.createBiquadFilter()
+    filt.type='lowpass'; filt.frequency.value=freq*4
+    src.connect(filt);filt.connect(gain)
+    gain.gain.setValueAtTime(0.7*vel,now)
+    gain.gain.exponentialRampToValueAtTime(0.001,now+decay)
+    src.start(now);src.stop(now+decay+0.05)
+  }
+}
+
+function playBass() {
+  const midi = pickBassNote()
+  playTone(midi - 12, 0.4) // bass an octave lower, quieter
+}
+
+// ════════════════════════════════════════════════════════════
+// KEYBOARD LAYOUT
+// ════════════════════════════════════════════════════════════
+
+const ROWS = [
+  ['`','1','2','3','4','5','6','7','8','9','0','-','=','⌫'],
+  ['⇥','q','w','e','r','t','y','u','i','o','p','[',']'],
+  ['⇪','a','s','d','f','g','h','j','k','l',';',"'",'↵'],
+  ['⇧','z','x','c','v','b','n','m',',','.','/',  '⇧'],
+  ['SPACE'],
+]
+
+// Map each typeable char to a position index (0–35) for melodic walking
+const CHAR_INDEX = {}
+'abcdefghijklmnopqrstuvwxyz0123456789'.split('').forEach((c,i)=>{ CHAR_INDEX[c]=i })
+
+const keyEls = {}
+
+function buildKeyboard() {
+  const kb = document.getElementById('keyboard')
+  ROWS.forEach(row=>{
+    const rowEl = document.createElement('div')
+    rowEl.className = 'kb-row'
+    row.forEach(k=>{
+      const el = document.createElement('div')
+      el.className = 'key'
+      const lk = k.toLowerCase()
+      if (k==='SPACE') {
+        el.classList.add('space')
+        el.innerHTML=`<span class="letter">SPACE</span>`
+        keyEls[' ']=el
+      } else if (['⌫','⇥','⇪','⇧','↵'].includes(k)) {
+        el.classList.add('wide')
+        el.innerHTML=`<span class="letter">${k}</span>`
+      } else {
+        el.innerHTML=`<span class="letter">${k.toUpperCase()}</span><span class="note"></span>`
+        if (CHAR_INDEX[lk]!==undefined || '0123456789,./;\'-=[`'.includes(lk)) keyEls[lk]=el
+      }
+      rowEl.appendChild(el)
+    })
+    kb.appendChild(rowEl)
+  })
+
+  // Build progression dots
+  const prog = getMood().progression
+  const dotsEl = document.getElementById('progDots')
+  dotsEl.innerHTML = ''
+  prog.forEach((_,i)=>{
+    const d=document.createElement('div')
+    d.className='prog-dot'+(i===0?' active':'')
+    dotsEl.appendChild(d)
+  })
+}
+
+function updateKeyHighlights() {
+  // Show chord tones on relevant keys
+  const chord = getChord()
+  const chordTones = chord.intervals.map(i=>(chord.root+i)%12)
+  const NOTE_NAMES_LOCAL = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B']
+
+  Object.values(keyEls).forEach(el=>{
+    el.classList.remove('in-chord')
+    const noteEl = el.querySelector('.note')
+    if (noteEl) noteEl.textContent = ''
+  })
+
+  // Map QWERTY keys to scale notes for display
+  const mood = getMood()
+  const scale = mood.melodyScale
+  let si = 0
+  'qwertyuiopasdfghjklzxcvbnm'.split('').forEach((c,i)=>{
+    const el = keyEls[c]
+    if (!el) return
+    const scaleStep = i % scale.length
+    const semi = (chord.root + scale[scaleStep]) % 12
+    const noteEl = el.querySelector('.note')
+    if (noteEl) noteEl.textContent = NOTE_NAMES_LOCAL[semi]
+    if (chordTones.includes(semi)) el.classList.add('in-chord')
+  })
+}
+
+// ════════════════════════════════════════════════════════════
+// KEY PRESS HANDLER
+// ════════════════════════════════════════════════════════════
+
+const activeFlashes = {}
+
+function handleKey(e) {
+  if (e.ctrlKey || e.metaKey || e.altKey) return
+  if (e.repeat) return
+  e.preventDefault()
+
+  initAudio()
+  if (ctx.state==='suspended') ctx.resume()
+
+  if (e.key==='Backspace') {
+    typedText = typedText.slice(0,-1)
+    updateDisplay()
+    flashKey('⌫', 0)
+    return
+  }
+
+  if (e.key.length===1) {
+    typedText += e.key
+    updateDisplay()
+
+    // Space = bass hit + chord check
+    if (e.key===' ') {
+      flashKey(' ', 2)
+      playBass()
+      // advance chord on every space
+      advanceChord()
+      return
+    }
+
+    // Get char index for melodic walking
+    const lk = e.key.toLowerCase()
+    const ci  = CHAR_INDEX[lk] ?? (lk.charCodeAt(0) % 26)
+    const midi = pickMelodyNote(ci)
+
+    const octave = Math.floor(midi/12)-1
+    playTone(midi, 0.72)
+    flashKey(lk, Math.abs(octave) % 7)
+    showNotePopup(NOTE_NAMES[midi%12] + octave, e)
+
+    charCount++
+    if (charCount >= CHARS_PER_CHORD) advanceChord()
+  }
+}
+
+function flashKey(k, colorIdx) {
+  const el = keyEls[k]
+  if (!el) return
+  el.classList.add('pressed', `flash-${colorIdx%7}`)
+  clearTimeout(activeFlashes[k])
+  activeFlashes[k] = setTimeout(()=>{
+    el.classList.remove('pressed')
+    for(let i=0;i<7;i++) el.classList.remove(`flash-${i}`)
+  }, 180)
+}
+
+// ════════════════════════════════════════════════════════════
+// DISPLAY
+// ════════════════════════════════════════════════════════════
+
+function updateDisplay() {
+  document.getElementById('placeholder').style.display = typedText ? 'none' : 'inline'
+  document.getElementById('typed').textContent = typedText
+}
+
+const popup = document.getElementById('notePopup')
+let popupTO
+function showNotePopup(note, e) {
+  popup.textContent = note
+  popup.style.left=(e.clientX-16)+'px'
+  popup.style.top=(e.clientY-10)+'px'
+  popup.classList.add('show')
+  clearTimeout(popupTO)
+  popupTO=setTimeout(()=>popup.classList.remove('show'),450)
+}
+
+// ════════════════════════════════════════════════════════════
+// WAVEFORM
+// ════════════════════════════════════════════════════════════
+
+const canvas=document.getElementById('wave')
+const wCtx=canvas.getContext('2d')
+function resizeCanvas(){canvas.width=canvas.offsetWidth*devicePixelRatio;canvas.height=canvas.offsetHeight*devicePixelRatio}
+resizeCanvas(); window.addEventListener('resize',resizeCanvas)
+
+function drawWave(){
+  requestAnimationFrame(drawWave)
+  const W=canvas.width,H=canvas.height
+  wCtx.clearRect(0,0,W,H)
+  if(!analyser){
+    wCtx.strokeStyle='rgba(200,168,122,0.12)'; wCtx.lineWidth=1
+    wCtx.beginPath();wCtx.moveTo(0,H/2);wCtx.lineTo(W,H/2);wCtx.stroke()
+    return
+  }
+  analyser.getByteTimeDomainData(dataArray)
+  wCtx.strokeStyle='rgba(200,168,122,0.55)'; wCtx.lineWidth=1.5*devicePixelRatio
+  wCtx.beginPath()
+  const sw=W/dataArray.length; let x=0
+  for(let i=0;i<dataArray.length;i++){
+    const y=(dataArray[i]/128)*(H/2)
+    i===0?wCtx.moveTo(x,y):wCtx.lineTo(x,y)
+    x+=sw
+  }
+  wCtx.lineTo(W,H/2); wCtx.stroke()
+}
+drawWave()
+
+// ════════════════════════════════════════════════════════════
+// MODE / MOOD SWITCHES
+// ════════════════════════════════════════════════════════════
+
+function setMode(m) {
+  currentMode=m
+  ;['piano','bell','pad','pluck'].forEach(id=>{
+    document.getElementById('btn-'+id).classList.toggle('active',id===m)
+  })
+}
+
+function setMood(m) {
+  currentMood=m; chordIndex=0; charCount=0
+  ;['dreamy','melancholy','jazz','epic'].forEach(id=>{
+    document.getElementById('btn-'+id).classList.toggle('active',id===m)
+  })
+  // rebuild dots for new progression
+  const prog=getMood().progression
+  const dotsEl=document.getElementById('progDots')
+  dotsEl.innerHTML=''
+  prog.forEach((_,i)=>{
+    const d=document.createElement('div')
+    d.className='prog-dot'+(i===0?' active':'')
+    dotsEl.appendChild(d)
+  })
+  updateChordDisplay()
+  updateKeyHighlights()
+}
+
+// ── Init ──────────────────────────────────────────────────
+buildKeyboard()
+updateDisplay()
+updateChordDisplay()
+updateKeyHighlights()
+document.addEventListener('keydown', handleKey)
+</script>
+</body>
+</html>
